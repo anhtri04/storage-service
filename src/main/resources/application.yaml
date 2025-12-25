@@ -4,11 +4,22 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
-        
-        
+      max-file-size: 500MB
+      max-request-size: 500MB
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/filestore
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
 aws:
   access-key-id: ${AWS_ACCESS_KEY_ID}
@@ -17,3 +28,22 @@ aws:
     bucket-name: ${S3_BUCKET_NAME}
     region: us-east-1
     
+file:
+  chunk:
+    size: 1048576 # 1MB
+
+jwt:
+  secret: ${JWT_SECRET:5eb7aba84d0c2835ccfffd28021ba0823dc923191213b43a6554ba244fa870f6}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:9000000}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}
+
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:5173
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: '*'
+  allow-credentials: true
+
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: false

@@ -1,23 +1,22 @@
 package com.hydrangea.storage_service.service;
 
+import com.hydrangea.storage_service.entity.User;
+import com.hydrangea.storage_service.repository.UserRepository;
+import com.hydrangea.storage_service.security.CustomUserDetails;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
 import java.security.Principal;
 
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Service;
 
-import com.hydrangea.storage_service.Repository.UserRepository;
-import com.hydrangea.storage_service.entity.User;
-import com.hydrangea.storage_service.security.CustomUserDetails;
-
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-
-@Slf4j
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
 
@@ -31,8 +30,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         CustomUserDetails customUserDetails = new CustomUserDetails();
         customUserDetails.setId(user.getId());
         customUserDetails.setUsername(user.getUsername());
-        customUserDetails.setPassword(user.getPassword());
+        customUserDetails.setPassword(user.getPasswordHash());
         customUserDetails.setRole(user.getRole());
+        customUserDetails.setEnabled(user.getEnabled());
 
         return customUserDetails;
     }

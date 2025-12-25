@@ -1,122 +1,147 @@
 package com.hydrangea.storage_service.controller;
 
-import com.hydrangea.storage_service.service.S3Service;
+import com.hydrangea.storage_service.dto.response.ApiResponse;
+import com.hydrangea.storage_service.dto.response.FileUploadResponse;
+import com.hydrangea.storage_service.entity.FileMetadata;
+import com.hydrangea.storage_service.security.CustomUserDetails;
+import com.hydrangea.storage_service.service.FileStorageService;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/files")
+@Slf4j
 public class FileStorageController {
 
-    private final S3Service s3Service;
+    private final FileStorageService fileStorageService;
 
-    public FileStorageController(S3Service s3Service) {
-        this.s3Service = s3Service;
+    public FileStorageController(FileStorageService fileStorageService) {
+        this.fileStorageService = fileStorageService;
     }
 
-    /**
-     * Upload a file
-     * POST /api/files/upload
-     */
+    // Upload a file
     @PostMapping("/upload")
-    public ResponseEntity<Map<String, String>> uploadFile(
-            @RequestParam("file") MultipartFile file) {
+    public ApiResponse<FileUploadResponse> uploadFile(@RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(value = "bucketId", required = false) Long bucketId) {
+        log.info("Uploading file for user: " + userDetails.getUsername());
         try {
             if (file.isEmpty()) {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("error", "File is empty"));
+                return ApiResponse.<FileUploadResponse>builder()
+                        .code(400)
+                        .message("File is empty")
+                        .build();
             }
 
-            String fileName = s3Service.uploadFile(file);
-
-            Map<String, String> response = new HashMap<>();
-            response.put("fileName", fileName);
-            response.put("message", "File uploaded successfully");
-
-            return ResponseEntity.ok(response);
+            FileUploadResponse response = fileStorageService.uploadFile(file, userDetails.getId(), bucketId);
+            return ApiResponse.<FileUploadResponse>builder()
+                    .code(200)
+                    .message("File uploaded successfully")
+                    .result(response)
+                    .build();
         } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to upload file: " + e.getMessage()));
+            log.error("Failed to upload file: " + e.getMessage());
+            return ApiResponse.<FileUploadResponse>builder()
+                    .code(500)
+                    .message("Failed to upload file: " + e.getMessage())
+                    .build();
         }
     }
 
-    /**
-     * Download a file
-     * GET /api/files/download/{fileName}
-     */
-    @GetMapping("/download/{fileName}")
-    public ResponseEntity<byte[]> downloadFile(@PathVariable String fileName) {
-        try {
-            byte[] fileData = s3Service.downloadFile(fileName);
-            HeadObjectResponse metadata = s3Service.getFileMetadata(fileName);
+    // Download a file
+    @GetMapping("/download/{fileId}")
+    public ResponseEntity<byte[]> downloadFile(
+            @PathVariable String fileId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
 
-            return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(metadata.contentType()))
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + fileName + "\"")
-                    .body(fileData);
+        log.info("Downloading file for user: " + userDetails.getUsername());
+
+        try {
+            FileMetadata metadata = fileStorageService.getFileMetadata(fileId, userDetails.getId());
+            byte[] fileData = fileStorageService.downloadFile(fileId, userDetails.getId());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(metadata.getContentType()));
+            headers.setContentDisposition(
+                    ContentDisposition.builder("attachment")
+                            .filename(metadata.getOriginalFileName())
+                            .build());
+            headers.setContentLength(fileData.length);
+
+            log.info("File downloaded successfully: " + metadata.getOriginalFileName() +
+                    ", size: " + fileData.length);
+
+            return new ResponseEntity<>(fileData, headers, HttpStatus.OK);
+
         } catch (Exception e) {
+            log.error("Failed to download file: " + e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }
 
-    /**
-     * Delete a file
-     * DELETE /api/files/{fileName}
-     */
-    @DeleteMapping("/{fileName}")
-    public ResponseEntity<Map<String, String>> deleteFile(@PathVariable String fileName) {
+    // Delete a file
+    @DeleteMapping("/{fileId}")
+    public ApiResponse<Map<String, String>> deleteFile(@PathVariable String fileId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.info("Deleting file for user: " + userDetails.getUsername());
         try {
-            s3Service.deleteFile(fileName);
-            return ResponseEntity.ok(Map.of("message", "File deleted successfully"));
+            fileStorageService.deleteFile(fileId, userDetails.getId());
+            return ApiResponse.<Map<String, String>>builder()
+                    .code(200)
+                    .message("File deleted successfully")
+                    .result(Map.of("message", "File deleted successfully"))
+                    .build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to delete file: " + e.getMessage()));
+            log.error("Failed to delete file: " + e.getMessage());
+            return ApiResponse.<Map<String, String>>builder()
+                    .code(500)
+                    .message("Failed to delete file: " + e.getMessage())
+                    .build();
         }
     }
 
-    /**
-     * List all files
-     * GET /api/files
-     */
-    @GetMapping
-    public ResponseEntity<List<String>> listFiles() {
+    // Get file metadata
+    @GetMapping("/{fileId}/metadata")
+    public ApiResponse<Map<String, Object>> getFileMetadata(@PathVariable String fileId,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.info("Getting file metadata for user: " + userDetails.getUsername());
         try {
-            List<String> files = s3Service.listFiles();
-            return ResponseEntity.ok(files);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
-     * Get file metadata
-     * GET /api/files/{fileName}/metadata
-     */
-    @GetMapping("/{fileName}/metadata")
-    public ResponseEntity<Map<String, Object>> getFileMetadata(@PathVariable String fileName) {
-        try {
-            HeadObjectResponse metadata = s3Service.getFileMetadata(fileName);
+            FileMetadata metadata = fileStorageService.getFileMetadata(fileId, userDetails.getId());
 
             Map<String, Object> response = new HashMap<>();
-            response.put("fileName", fileName);
-            response.put("contentType", metadata.contentType());
-            response.put("contentLength", metadata.contentLength());
-            response.put("lastModified", metadata.lastModified().toString());
+            response.put("fileId", metadata.getFileId());
+            response.put("originalFileName", metadata.getOriginalFileName());
+            response.put("fileSize", metadata.getFileSize());
+            response.put("contentType", metadata.getContentType());
+            response.put("uploadedAt", metadata.getUploadedAt().toString());
+            response.put("totalChunks", metadata.getChunkMappings().size());
 
-            return ResponseEntity.ok(response);
+            return ApiResponse.<Map<String, Object>>builder()
+                    .code(200)
+                    .message("File metadata retrieved successfully")
+                    .result(response)
+                    .build();
         } catch (Exception e) {
-            return ResponseEntity.notFound().build();
+            log.error("Failed to get file metadata: " + e.getMessage());
+            return ApiResponse.<Map<String, Object>>builder()
+                    .code(404)
+                    .message("File not found")
+                    .build();
         }
     }
 }

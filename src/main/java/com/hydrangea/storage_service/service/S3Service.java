@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class S3Service {
 
     private final S3Client s3Client;
-    
+
     @Value("${aws.s3.bucket-name}")
     private String bucketName;
 
@@ -25,89 +25,35 @@ public class S3Service {
         this.s3Client = s3Client;
     }
 
-    /**
-     * Upload a file to S3
-     */
-    public String uploadFile(MultipartFile file) throws IOException {
-        String fileName = generateFileName(file.getOriginalFilename());
-        
+    public void uploadChunk(String s3Key, byte[] chunkData) {
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
-                .key(fileName)
-                .contentType(file.getContentType())
+                .key(s3Key)
+                .contentType("application/octet-stream")
                 .build();
 
-        s3Client.putObject(putObjectRequest, 
-                RequestBody.fromBytes(file.getBytes()));
-
-        return fileName;
+        s3Client.putObject(putObjectRequest, RequestBody.fromBytes(chunkData));
     }
 
-    /**
-     * Download a file from S3
-     */
-    public byte[] downloadFile(String fileName) {
+    public byte[] downloadChunk(String s3Key) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
-                .key(fileName)
+                .key(s3Key)
                 .build();
 
-        ResponseInputStream<GetObjectResponse> response = s3Client.getObject(getObjectRequest);
-        
-        try {
+        try (ResponseInputStream<GetObjectResponse> response = s3Client.getObject(getObjectRequest)) {
             return response.readAllBytes();
         } catch (IOException e) {
-            throw new RuntimeException("Error reading file from S3", e);
+            throw new RuntimeException("Error reading chunk from S3", e);
         }
     }
 
-    /**
-     * Delete a file from S3
-     */
-    public void deleteFile(String fileName) {
+    public void deleteChunk(String s3Key) {
         DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
                 .bucket(bucketName)
-                .key(fileName)
+                .key(s3Key)
                 .build();
 
         s3Client.deleteObject(deleteObjectRequest);
-    }
-
-    /**
-     * List all files in the bucket
-     */
-    public List<String> listFiles() {
-        ListObjectsV2Request listObjectsRequest = ListObjectsV2Request.builder()
-                .bucket(bucketName)
-                .build();
-
-        ListObjectsV2Response listObjectsResponse = s3Client.listObjectsV2(listObjectsRequest);
-
-        return listObjectsResponse.contents().stream()
-                .map(S3Object::key)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get file metadata
-     */
-    public HeadObjectResponse getFileMetadata(String fileName) {
-        HeadObjectRequest headObjectRequest = HeadObjectRequest.builder()
-                .bucket(bucketName)
-                .key(fileName)
-                .build();
-
-        return s3Client.headObject(headObjectRequest);
-    }
-
-    /**
-     * Generate a unique filename
-     */
-    private String generateFileName(String originalFilename) {
-        String extension = "";
-        if (originalFilename != null && originalFilename.contains(".")) {
-            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-        }
-        return UUID.randomUUID().toString() + extension;
     }
 }

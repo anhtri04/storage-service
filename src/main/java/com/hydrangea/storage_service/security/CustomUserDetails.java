@@ -2,7 +2,6 @@ package com.hydrangea.storage_service.security;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -13,7 +12,7 @@ import lombok.Data;
 @Data
 public class CustomUserDetails implements UserDetails {
 
-    private UUID id;
+    private Long id;
     private String username;
     private String password;
     private String role;

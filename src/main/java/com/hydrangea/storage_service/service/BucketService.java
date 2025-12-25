@@ -1,24 +1,160 @@
 package com.hydrangea.storage_service.service;
 
 import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
-import com.hydrangea.storage_service.Repository.BucketRepository;
+import com.hydrangea.storage_service.dto.auth.UserDTO;
+import com.hydrangea.storage_service.dto.request.BucketCreationRequest;
+import com.hydrangea.storage_service.dto.request.BucketUpdateRequest;
 import com.hydrangea.storage_service.dto.response.BucketResponse;
+import com.hydrangea.storage_service.entity.Bucket;
+import com.hydrangea.storage_service.entity.User;
+import com.hydrangea.storage_service.mapper.UserMapper;
+import com.hydrangea.storage_service.repository.BucketRepository;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BucketService {
 
-    private final BucketRepository bucketRepository;
+        private final BucketRepository bucketRepository;
+        private final UserMapper userMapper;
 
-    public BucketResponse getAllBuckets() {
+        // Create a new bucket
+        public BucketResponse createBucket(BucketCreationRequest request, UserDTO user) {
+                log.info("Creating bucket for user: " + user.getUsername());
+                try {
 
-        List<BucketResponse> buckets = bucketRepository.findAllByUserId();
+                        User userData = userMapper.toUser(user);
+                        log.info("User data: " + userData);
 
-        return buckets;
-    }
+                        Bucket bucket = Bucket.builder()
+                                        .name(request.getName())
+                                        .bucketId(UUID.randomUUID().toString())
+                                        .description(request.getDescription())
+                                        .user(userData)
+                                        .build();
+
+                        bucketRepository.save(bucket);
+
+                        return BucketResponse.builder()
+                                        .id(bucket.getId())
+                                        .name(bucket.getName())
+                                        .description(bucket.getDescription())
+                                        .user(user)
+                                        .build();
+                } catch (Exception e) {
+                        log.error("Failed to create bucket: " + e.getMessage());
+                        throw new RuntimeException("Failed to create bucket");
+                }
+        }
+
+        // Get all buckets for the current login user
+        public List<BucketResponse> listUserBuckets(UserDTO user) {
+                log.info("Listing buckets for user: " + user.getUsername());
+                try {
+                        List<Bucket> buckets = bucketRepository.findByUserId(user.getId());
+                        return buckets.stream()
+                                        .map(bucket -> BucketResponse.builder()
+                                                        .id(bucket.getId())
+                                                        .name(bucket.getName())
+                                                        .description(bucket.getDescription())
+                                                        .user(user)
+                                                        .build())
+                                        .collect(Collectors.toList());
+                } catch (Exception e) {
+                        log.error("Failed to list buckets: " + e.getMessage());
+                        throw new RuntimeException("Failed to list buckets");
+                }
+        }
+
+        // Get a bucket by ID
+        public BucketResponse getBucketById(Long bucketId, Long userId) {
+                log.info("Getting bucket by ID: " + bucketId);
+                try {
+                        Bucket bucket = bucketRepository.findByIdAndUserId(bucketId, userId)
+                                        .orElseThrow(() -> new RuntimeException("Bucket not found"));
+                        return BucketResponse.builder()
+                                        .id(bucket.getId())
+                                        .name(bucket.getName())
+                                        .description(bucket.getDescription())
+                                        .build();
+                } catch (Exception e) {
+                        log.error("Failed to get bucket by ID: " + e.getMessage());
+                        throw new RuntimeException("Failed to get bucket by ID");
+                }
+        }
+
+        // Delete a bucket by ID
+        public void deleteBucket(Long bucketId, Long userId) {
+                log.info("Deleting bucket by ID: " + bucketId);
+                try {
+                        Bucket bucket = bucketRepository.findByIdAndUserId(bucketId, userId)
+                                        .orElseThrow(() -> new RuntimeException(
+                                                        "This user can't delete this bucket because of no authorization"));
+                        bucketRepository.deleteById(bucketId);
+                } catch (Exception e) {
+                        log.error("Failed to delete bucket by ID: " + e.getMessage());
+                        throw new RuntimeException("Failed to delete bucket by ID");
+                }
+        }
+
+        // Update a bucket by ID
+        public BucketResponse updateBucket(BucketUpdateRequest request) {
+                log.info("Updating bucket by ID: " + request.getBucketId());
+                try {
+                        Bucket bucket = bucketRepository.findByIdAndUserId(request.getBucketId(), request.getUserId())
+                                        .orElseThrow(() -> new RuntimeException("Bucket not found"));
+
+                        // Update only when value is provided
+                        if (request.getName() != null) {
+                                bucket.setName(request.getName());
+                        }
+
+                        if (request.getDescription() != null) {
+                                bucket.setDescription(request.getDescription());
+                        }
+
+                        bucketRepository.save(bucket);
+
+                        return BucketResponse.builder()
+                                        .id(bucket.getId())
+                                        .name(bucket.getName())
+                                        .description(bucket.getDescription())
+                                        .build();
+                } catch (Exception e) {
+                        log.error("Failed to update bucket by ID: " + e.getMessage());
+                        throw new RuntimeException("Failed to update bucket by ID");
+                }
+        }
+
+        // Create a default bucket for a user when registering a new account
+        public BucketResponse createDefaultBucket(UserDTO user) {
+                log.info("Creating default bucket for user: " + user.getUsername());
+                try {
+                        Bucket bucket = Bucket.builder()
+                                        .name("Default")
+                                        .user(userMapper.toUser(user))
+                                        .isDefault(true)
+                                        .build();
+
+                        bucketRepository.save(bucket);
+
+                        return BucketResponse.builder()
+                                        .id(bucket.getId())
+                                        .name(bucket.getName())
+                                        .user(user)
+                                        .build();
+                } catch (Exception e) {
+                        log.error("Failed to create default bucket: " + e.getMessage());
+                        throw new RuntimeException("Failed to create default bucket");
+                }
+        }
+
 }
