@@ -38,7 +38,7 @@ public class FileStorageController {
     @PostMapping("/upload")
     public ApiResponse<FileUploadResponse> uploadFile(@RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @RequestParam(value = "bucketId", required = false) Long bucketId) {
+            @RequestParam(value = "bucketId", required = false) String bucketId) {
         log.info("Uploading file for user: " + userDetails.getUsername());
         try {
             if (file.isEmpty()) {

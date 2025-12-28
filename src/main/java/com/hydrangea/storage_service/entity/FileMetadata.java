@@ -2,7 +2,11 @@ package com.hydrangea.storage_service.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -10,12 +14,16 @@ import java.util.List;
 
 @Entity
 @Table(name = "files")
-@Data
+@Getter
+@Setter
+@ToString(exclude = { "bucket", "chunkMappings" })
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @NoArgsConstructor
 public class FileMetadata {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     @Column(nullable = false, unique = true)
@@ -33,7 +41,7 @@ public class FileMetadata {
     @Column(nullable = false)
     private LocalDateTime uploadedAt;
 
-    @OneToMany(mappedBy = "file", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "file", cascade = CascadeType.ALL)
     @OrderBy("chunkOrder ASC")
     private List<FileChunkMapping> chunkMappings = new ArrayList<>();
 

@@ -2,6 +2,8 @@ package com.hydrangea.storage_service.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.hydrangea.storage_service.dto.response.ChunkInfo;
@@ -14,6 +16,8 @@ import com.hydrangea.storage_service.repository.BucketRepository;
 import com.hydrangea.storage_service.repository.ChunkRepository;
 import com.hydrangea.storage_service.repository.FileMetadataRepository;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -23,6 +27,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class FileStorageService {
 
     private final FileMetadataRepository fileMetadataRepository;
@@ -44,13 +49,13 @@ public class FileStorageService {
     }
 
     @Transactional
-    public FileUploadResponse uploadFile(MultipartFile file, Long userId, Long bucketId) throws IOException {
+    public FileUploadResponse uploadFile(MultipartFile file, Long userId, String bucketId) throws IOException {
 
         if (bucketId == null) {
             throw new RuntimeException("Bucket ID is required");
         }
 
-        Bucket bucket = bucketRepository.findByIdAndUserId(bucketId, userId)
+        Bucket bucket = bucketRepository.findByBucketIdAndUserId(bucketId, userId)
                 .orElseThrow(() -> new RuntimeException(
                         "Bucket not found with ID and user ID: " + bucketId + " and " + userId));
         // Read file data
@@ -190,6 +195,7 @@ public class FileStorageService {
 
     @Transactional
     public void deleteFile(String fileId, Long userId) {
+        log.info("Deleting file: " + fileId);
         FileMetadata fileMetadata = fileMetadataRepository.findByFileIdAndBucket_User_Id(fileId, userId)
                 .orElseThrow(() -> new RuntimeException("File not found: " + fileId));
 
@@ -197,27 +203,58 @@ public class FileStorageService {
             throw new RuntimeException("User is not authorized to delete this file");
         }
 
+        // Collect S3 keys to delete AFTER successful transaction
+        List<String> s3KeysToDelete = new ArrayList<>();
+
+        // Collect chunks to process BEFORE deleting file metadata
+        List<Chunk> chunksToProcess = fileMetadata.getChunkMappings().stream()
+                .map(FileChunkMapping::getChunk)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // Remove from bucket association to avoid Hibernate disassociation updates
+        if (fileMetadata.getBucket() != null) {
+            fileMetadata.getBucket().getFiles().remove(fileMetadata);
+        }
+
+        // Delete file metadata - this will cascade delete all mappings
+        fileMetadataRepository.delete(fileMetadata);
+
         // Process each chunk
-        for (FileChunkMapping mapping : fileMetadata.getChunkMappings()) {
-            Chunk chunk = mapping.getChunk();
+        for (Chunk chunk : chunksToProcess) {
             chunk.decrementReference();
 
             // If no more references, delete from S3 and database
             if (chunk.getReferenceCount() == 0) {
-                s3Service.deleteChunk(chunk.getS3Key());
+                s3KeysToDelete.add(chunk.getS3Key());
                 chunkRepository.delete(chunk);
             } else {
                 chunkRepository.save(chunk);
             }
         }
 
-        fileMetadataRepository.delete(fileMetadata);
+        // Register S3 deletion to happen AFTER transaction commits successfully
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        // This runs ONLY if transaction commits successfully
+                        for (String s3Key : s3KeysToDelete) {
+                            try {
+                                s3Service.deleteChunk(s3Key);
+                            } catch (Exception e) {
+                                log.error("Failed to delete chunk from S3: {}", s3Key, e);
+                                // Consider adding to a dead letter queue for retry
+                            }
+                        }
+                    }
+                });
     }
 
     @Transactional(readOnly = true)
-    public List<FileMetadata> listFiles(Long bucketId, Long userId) {
+    public List<FileMetadata> listFiles(String bucketId, Long userId) {
 
-        Bucket bucket = bucketRepository.findByIdAndUserId(bucketId, userId)
+        Bucket bucket = bucketRepository.findByBucketIdAndUserId(bucketId, userId)
                 .orElseThrow(() -> new RuntimeException(
                         "Bucket not found with ID and user ID: " + bucketId + " and " + userId));
 

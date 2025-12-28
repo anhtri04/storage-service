@@ -12,6 +12,6 @@ import lombok.NoArgsConstructor;
 public class BucketUpdateRequest {
     private String name;
     private String description;
-    private Long bucketId;
+    private String bucketId;
     private Long userId;
 }

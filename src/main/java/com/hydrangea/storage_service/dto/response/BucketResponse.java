@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class BucketResponse {
-    private Long id;
+    private String bucketId;
     private String name;
     private String description;
     private UserDTO user;

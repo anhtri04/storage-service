@@ -19,7 +19,6 @@ import com.hydrangea.storage_service.dto.request.BucketUpdateRequest;
 import com.hydrangea.storage_service.dto.response.ApiResponse;
 import com.hydrangea.storage_service.dto.response.BucketResponse;
 import com.hydrangea.storage_service.dto.response.FileResponse;
-import com.hydrangea.storage_service.entity.FileMetadata;
 import com.hydrangea.storage_service.mapper.UserMapper;
 import com.hydrangea.storage_service.security.CustomUserDetails;
 import com.hydrangea.storage_service.service.BucketService;
@@ -82,9 +81,9 @@ public class BucketController {
 
         // Get a bucket details and files containing in it by id
         @GetMapping("/{bucketId}")
-        public ApiResponse<BucketResponse> getBucketById(@PathVariable Long bucketId,
+        public ApiResponse<BucketResponse> getBucketById(@PathVariable String bucketId,
                         @AuthenticationPrincipal CustomUserDetails userDetails) {
-                log.info("Getting bucket details for user: " + userDetails.getUsername());
+                log.info("Getting bucket {} for user: {}", bucketId, userDetails.getUsername());
                 try {
                         List<FileResponse> files = fileStorageService.listFiles(bucketId, userDetails.getId())
                                         .stream()
@@ -117,7 +116,7 @@ public class BucketController {
 
         // Delete a bucket by id
         @DeleteMapping("/{bucketId}")
-        public ApiResponse<Void> deleteBucket(@PathVariable Long bucketId,
+        public ApiResponse<Void> deleteBucket(@PathVariable String bucketId,
                         @AuthenticationPrincipal CustomUserDetails userDetails) {
                 log.info("Deleting bucket for user: " + userDetails.getUsername());
                 try {
@@ -137,7 +136,7 @@ public class BucketController {
 
         // Update a bucket by id
         @PutMapping("/{bucketId}")
-        public ApiResponse<BucketResponse> updateBucket(@PathVariable Long bucketId,
+        public ApiResponse<BucketResponse> updateBucket(@PathVariable String bucketId,
                         @RequestBody BucketUpdateRequest request,
                         @AuthenticationPrincipal CustomUserDetails userDetails) {
                 log.info("Updating bucket for user: " + userDetails.getUsername());

@@ -1,16 +1,19 @@
 package com.hydrangea.storage_service.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.hydrangea.storage_service.dto.auth.UserDTO;
 import com.hydrangea.storage_service.dto.request.BucketCreationRequest;
 import com.hydrangea.storage_service.dto.request.BucketUpdateRequest;
 import com.hydrangea.storage_service.dto.response.BucketResponse;
 import com.hydrangea.storage_service.entity.Bucket;
+import com.hydrangea.storage_service.entity.FileMetadata;
 import com.hydrangea.storage_service.entity.User;
 import com.hydrangea.storage_service.mapper.UserMapper;
 import com.hydrangea.storage_service.repository.BucketRepository;
@@ -24,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 public class BucketService {
 
         private final BucketRepository bucketRepository;
+        private final FileStorageService fileStorageService;
         private final UserMapper userMapper;
 
         // Create a new bucket
@@ -44,7 +48,7 @@ public class BucketService {
                         bucketRepository.save(bucket);
 
                         return BucketResponse.builder()
-                                        .id(bucket.getId())
+                                        .bucketId(bucket.getBucketId())
                                         .name(bucket.getName())
                                         .description(bucket.getDescription())
                                         .user(user)
@@ -62,7 +66,7 @@ public class BucketService {
                         List<Bucket> buckets = bucketRepository.findByUserId(user.getId());
                         return buckets.stream()
                                         .map(bucket -> BucketResponse.builder()
-                                                        .id(bucket.getId())
+                                                        .bucketId(bucket.getBucketId())
                                                         .name(bucket.getName())
                                                         .description(bucket.getDescription())
                                                         .user(user)
@@ -75,13 +79,13 @@ public class BucketService {
         }
 
         // Get a bucket by ID
-        public BucketResponse getBucketById(Long bucketId, Long userId) {
+        public BucketResponse getBucketById(String bucketId, Long userId) {
                 log.info("Getting bucket by ID: " + bucketId);
                 try {
-                        Bucket bucket = bucketRepository.findByIdAndUserId(bucketId, userId)
+                        Bucket bucket = bucketRepository.findByBucketIdAndUserId(bucketId, userId)
                                         .orElseThrow(() -> new RuntimeException("Bucket not found"));
                         return BucketResponse.builder()
-                                        .id(bucket.getId())
+                                        .bucketId(bucket.getBucketId())
                                         .name(bucket.getName())
                                         .description(bucket.getDescription())
                                         .build();
@@ -92,16 +96,31 @@ public class BucketService {
         }
 
         // Delete a bucket by ID
-        public void deleteBucket(Long bucketId, Long userId) {
+        @Transactional
+        public void deleteBucket(String bucketId, Long userId) {
                 log.info("Deleting bucket by ID: " + bucketId);
                 try {
-                        Bucket bucket = bucketRepository.findByIdAndUserId(bucketId, userId)
+                        Bucket bucket = bucketRepository.findByBucketIdAndUserId(bucketId, userId)
                                         .orElseThrow(() -> new RuntimeException(
                                                         "This user can't delete this bucket because of no authorization"));
-                        bucketRepository.deleteById(bucketId);
+
+                        // Create a detached copy of files to avoid ConcurrentModificationException
+                        if (bucket.getFiles() != null && !bucket.getFiles().isEmpty()) {
+                                // Create a new ArrayList from the Set to detach from Hibernate's tracking
+                                List<String> fileIds = new ArrayList<>(bucket.getFiles()).stream()
+                                                .map(FileMetadata::getFileId)
+                                                .collect(Collectors.toList());
+
+                                // Delete files one by one
+                                for (String fileId : fileIds) {
+                                        fileStorageService.deleteFile(fileId, userId);
+                                }
+                        }
+                        bucketRepository.delete(bucket);
+
                 } catch (Exception e) {
-                        log.error("Failed to delete bucket by ID: " + e.getMessage());
-                        throw new RuntimeException("Failed to delete bucket by ID");
+                        log.error("Failed to delete bucket: " + e.getMessage(), e);
+                        throw new RuntimeException("Failed to delete bucket: " + e.getMessage());
                 }
         }
 
@@ -109,7 +128,8 @@ public class BucketService {
         public BucketResponse updateBucket(BucketUpdateRequest request) {
                 log.info("Updating bucket by ID: " + request.getBucketId());
                 try {
-                        Bucket bucket = bucketRepository.findByIdAndUserId(request.getBucketId(), request.getUserId())
+                        Bucket bucket = bucketRepository
+                                        .findByBucketIdAndUserId(request.getBucketId(), request.getUserId())
                                         .orElseThrow(() -> new RuntimeException("Bucket not found"));
 
                         // Update only when value is provided
@@ -124,7 +144,7 @@ public class BucketService {
                         bucketRepository.save(bucket);
 
                         return BucketResponse.builder()
-                                        .id(bucket.getId())
+                                        .bucketId(bucket.getBucketId())
                                         .name(bucket.getName())
                                         .description(bucket.getDescription())
                                         .build();
@@ -147,7 +167,7 @@ public class BucketService {
                         bucketRepository.save(bucket);
 
                         return BucketResponse.builder()
-                                        .id(bucket.getId())
+                                        .bucketId(bucket.getBucketId())
                                         .name(bucket.getName())
                                         .user(user)
                                         .build();

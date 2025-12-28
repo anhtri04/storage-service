@@ -2,18 +2,17 @@ package com.hydrangea.storage_service.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
+
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class S3Service {
 
     private final S3Client s3Client;
@@ -49,6 +48,7 @@ public class S3Service {
     }
 
     public void deleteChunk(String s3Key) {
+        log.info("Deleting chunk from S3: " + s3Key);
         DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
                 .bucket(bucketName)
                 .key(s3Key)
