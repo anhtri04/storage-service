@@ -1,0 +1,5 @@
+{
+  "name": "Smart Storage Service",
+  "description": "A professional storage management system with bucket and file administration, featuring a clean MongoDB-inspired aesthetic.",
+  "requestFramePermissions": []
+}
