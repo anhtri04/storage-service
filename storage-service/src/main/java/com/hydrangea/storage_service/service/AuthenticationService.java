@@ -7,6 +7,8 @@ import com.hydrangea.storage_service.dto.auth.RegisterRequest;
 import com.hydrangea.storage_service.dto.auth.RegisterResponse;
 import com.hydrangea.storage_service.dto.auth.UserDTO;
 import com.hydrangea.storage_service.entity.User;
+import com.hydrangea.storage_service.exception.AppException;
+import com.hydrangea.storage_service.exception.ErrorCode;
 import com.hydrangea.storage_service.mapper.UserMapper;
 import com.hydrangea.storage_service.repository.UserRepository;
 import com.hydrangea.storage_service.util.JwtUtil;
@@ -58,7 +60,7 @@ public class AuthenticationService {
                 return new RegisterResponse("User registered successfully");
             } else {
                 log.error("Username or email already exists: {}", request.getUsername());
-                throw new IllegalArgumentException("Username or email already exists");
+                throw new AppException(ErrorCode.USER_EXISTED);
             }
         } catch (Exception e) {
             log.error("Error during registration: {}", e.getMessage());
