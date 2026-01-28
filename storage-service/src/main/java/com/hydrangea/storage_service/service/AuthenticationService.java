@@ -5,11 +5,9 @@ import com.hydrangea.storage_service.dto.auth.LoginResponse;
 import com.hydrangea.storage_service.dto.auth.RefreshTokenRequest;
 import com.hydrangea.storage_service.dto.auth.RegisterRequest;
 import com.hydrangea.storage_service.dto.auth.RegisterResponse;
-import com.hydrangea.storage_service.dto.auth.UserDTO;
 import com.hydrangea.storage_service.entity.User;
 import com.hydrangea.storage_service.exception.AppException;
 import com.hydrangea.storage_service.exception.ErrorCode;
-import com.hydrangea.storage_service.mapper.UserMapper;
 import com.hydrangea.storage_service.repository.UserRepository;
 import com.hydrangea.storage_service.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -34,9 +32,7 @@ public class AuthenticationService {
     private final UserDetailsService userDetailsService;
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
-    private final BucketService bucketService;
     private final PasswordEncoder passwordEncoder;
-    private final UserMapper userMapper;
 
     public RegisterResponse register(RegisterRequest request) {
         log.info("Registering new user: {}", request.getUsername());

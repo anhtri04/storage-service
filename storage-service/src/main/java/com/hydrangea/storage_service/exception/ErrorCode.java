@@ -17,6 +17,8 @@ public enum ErrorCode {
     FILE_EXISTED(1009, "File existed", HttpStatus.BAD_REQUEST),
     FILE_SIZE_EXCEEDED(1010, "File size exceeded", HttpStatus.BAD_REQUEST),
     FILE_TYPE_NOT_SUPPORTED(1011, "File type not supported", HttpStatus.BAD_REQUEST),
+    BUCKET_NOT_FOUND(1012, "Bucket not found", HttpStatus.NOT_FOUND),
+    COLLABORATOR_NOT_FOUND(1013, "Collaborator not found", HttpStatus.NOT_FOUND),
     ;
 
     private final int code;

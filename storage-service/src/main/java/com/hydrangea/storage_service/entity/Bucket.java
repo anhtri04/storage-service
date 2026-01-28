@@ -46,9 +46,6 @@ public class Bucket {
     @Column(nullable = false)
     private String name;
 
-    // @Column(nullable = false, unique = true)
-    // private String bucketId;
-
     @Column(length = 500)
     private String description;
 

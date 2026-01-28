@@ -12,6 +12,8 @@ import com.hydrangea.storage_service.entity.Bucket;
 public interface BucketRepository extends JpaRepository<Bucket, Long> {
     Optional<Bucket> findByNameAndUserId(String name, Long userId);
 
+    Optional<Bucket> findByBucketId(String bucketId);
+
     List<Bucket> findByUserId(Long userId);
 
     Optional<Bucket> findByBucketIdAndUserId(String bucketId, Long userId);
