@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/share-links/verify").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
@@ -45,6 +46,8 @@ public class SecurityConfig {
                         // Authenticated endpoints
                         .requestMatchers("/api/files/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/buckets/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/collab/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/share-links/**").hasAnyRole("USER", "ADMIN")
 
                         // All other requests require authentication
                         .anyRequest().authenticated())

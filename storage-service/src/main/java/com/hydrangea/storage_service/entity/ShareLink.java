@@ -13,12 +13,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.PrePersist;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Builder.Default;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @NoArgsConstructor
@@ -26,6 +28,7 @@ import lombok.Setter;
 @Builder
 @Getter
 @Setter
+@ToString(exclude = "hashPassword")
 @Table(name = "share_links")
 public class ShareLink {
 
@@ -60,4 +63,8 @@ public class ShareLink {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+    }
 }

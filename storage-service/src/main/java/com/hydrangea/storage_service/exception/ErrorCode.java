@@ -19,6 +19,9 @@ public enum ErrorCode {
     FILE_TYPE_NOT_SUPPORTED(1011, "File type not supported", HttpStatus.BAD_REQUEST),
     BUCKET_NOT_FOUND(1012, "Bucket not found", HttpStatus.NOT_FOUND),
     COLLABORATOR_NOT_FOUND(1013, "Collaborator not found", HttpStatus.NOT_FOUND),
+    SHARE_LINK_NOT_FOUND(1014, "Share link not found", HttpStatus.NOT_FOUND),
+    INVALID_SHARE_LINK(1015, "Invalid or expired share link", HttpStatus.BAD_REQUEST),
+    SHARE_LINK_PASSWORD_INVALID(1016, "Invalid password for share link", HttpStatus.UNAUTHORIZED),
     ;
 
     private final int code;
