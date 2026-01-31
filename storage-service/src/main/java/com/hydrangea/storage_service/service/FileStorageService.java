@@ -18,6 +18,7 @@ import com.hydrangea.storage_service.repository.FileMetadataRepository;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 @Slf4j
@@ -265,5 +268,66 @@ public class FileStorageService {
     public FileMetadata getFileMetadata(String fileId, Long userId) {
         return fileMetadataRepository.findByFileIdAndBucket_User_Id(fileId, userId)
                 .orElseThrow(() -> new RuntimeException("File not found: " + fileId));
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] downloadFilesAsZip(List<String> fileIds, Long userId) throws IOException {
+        if (fileIds == null || fileIds.isEmpty()) {
+            throw new IllegalArgumentException("File IDs cannot be null or empty");
+        }
+
+        log.info("Downloading " + fileIds.size() + " files as ZIP for user: " + userId);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            for (String fileId : fileIds) {
+                try {
+                    // Get file metadata
+                    FileMetadata fileMetadata = fileMetadataRepository
+                            .findByFileIdAndBucket_User_Id(fileId, userId)
+                            .orElse(null);
+
+                    if (fileMetadata == null) {
+                        log.warn("File not found or access denied: " + fileId);
+                        continue;
+                    }
+
+                    // Get sorted chunk mappings
+                    List<FileChunkMapping> sortedMappings = fileMetadata.getChunkMappings()
+                            .stream()
+                            .sorted(Comparator.comparingInt(FileChunkMapping::getChunkOrder))
+                            .collect(Collectors.toList());
+
+                    // Download chunks and reassemble file
+                    List<byte[]> chunkDataList = new ArrayList<>();
+                    for (FileChunkMapping mapping : sortedMappings) {
+                        byte[] chunkData = s3Service.downloadChunk(mapping.getChunk().getS3Key());
+                        chunkDataList.add(chunkData);
+                    }
+
+                    byte[] fileData = chunkingService.reassembleChunks(chunkDataList);
+
+                    // Add file to ZIP
+                    ZipEntry zipEntry = new ZipEntry(fileMetadata.getOriginalFileName());
+                    zos.putNextEntry(zipEntry);
+                    zos.write(fileData);
+                    zos.closeEntry();
+
+                    log.info("Added file to ZIP: " + fileMetadata.getOriginalFileName() + " (" + fileData.length + " bytes)");
+
+                } catch (Exception e) {
+                    log.error("Failed to add file " + fileId + " to ZIP: " + e.getMessage(), e);
+                    // Continue with other files instead of failing the entire ZIP
+                }
+            }
+
+            zos.finish();
+        }
+
+        byte[] zipBytes = baos.toByteArray();
+        log.info("ZIP created: " + zipBytes.length + " bytes");
+
+        return zipBytes;
     }
 }

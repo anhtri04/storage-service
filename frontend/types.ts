@@ -21,6 +21,10 @@ export interface FileEntry {
   bucketName: string;
 }
 
+export interface SelectedFileEntry extends FileEntry {
+  selected: boolean;
+}
+
 export interface Bucket {
   bucketId: string;
   name: string;

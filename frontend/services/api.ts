@@ -35,7 +35,11 @@ class ApiClient {
       headers.set('Authorization', `Bearer ${this.accessToken}`);
     }
 
-    const response = await fetch(`${BASE_URL}${url}`, { ...options, headers });
+    const response = await fetch(`${BASE_URL}${url}`, {
+      ...options,
+      headers,
+      credentials: 'include'
+    });
 
     if (response.status === 401) {
       // Attempt token refresh
@@ -156,6 +160,112 @@ class ApiClient {
 
   async deleteFile(fileId: string) {
     return this.fetchWithAuth(`/files/${fileId}`, { method: 'DELETE' });
+  }
+
+  async deleteMultipleFiles(fileIds: string[]): Promise<{ success: string[]; failed: string[] }> {
+    const results = { success: [] as string[], failed: [] as string[] };
+
+    if (!fileIds || fileIds.length === 0) {
+      return results;
+    }
+
+    for (const fileId of fileIds) {
+      try {
+        const res = await this.deleteFile(fileId);
+        if (res.ok) {
+          results.success.push(fileId);
+        } else {
+          results.failed.push(fileId);
+        }
+      } catch (e) {
+        results.failed.push(fileId);
+      }
+    }
+
+    return results;
+  }
+
+  async downloadFilesAsZip(fileIds: string[], fileNames: string[]): Promise<void> {
+    if (!fileIds || fileIds.length === 0) {
+      return;
+    }
+
+    try {
+      const res = await this.fetchWithAuth('/files/download-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileIds })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to download ZIP: HTTP ${res.status} ${res.statusText}`);
+      }
+
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) {
+        throw new Error('Received empty ZIP file');
+      }
+
+      // Trigger download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Extract filename from Content-Disposition header or use default
+      const disposition = res.headers.get('Content-Disposition');
+      let filename = `files-${new Date().toISOString().slice(0, 10)}.zip`;
+      if (disposition) {
+        const filenameMatch = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      console.log(`ZIP downloaded successfully: ${blob.size} bytes`);
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to download ZIP:', error);
+      throw new Error(`Failed to download files as ZIP: ${message}`);
+    }
+  }
+
+  async downloadFilesIndividually(fileIds: string[], fileNames: string[]): Promise<void> {
+    if (!fileIds || fileIds.length === 0 || !fileNames || fileNames.length === 0) {
+      return;
+    }
+
+    if (fileIds.length !== fileNames.length) {
+      throw new Error('fileIds and fileNames must have the same length');
+    }
+
+    for (let i = 0; i < fileIds.length; i++) {
+      try {
+        const res = await this.downloadFile(fileIds[i]);
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileNames[i];
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }
+      } catch (e) {
+        console.error(`Failed to download ${fileNames[i]}:`, e);
+      }
+
+      // Add 500ms delay between downloads to prevent browser blocking
+      if (i < fileIds.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
   }
 }
 
