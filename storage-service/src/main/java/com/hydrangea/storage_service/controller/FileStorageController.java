@@ -1,5 +1,6 @@
 package com.hydrangea.storage_service.controller;
 
+import com.hydrangea.storage_service.dto.request.BulkDownloadRequest;
 import com.hydrangea.storage_service.dto.response.ApiResponse;
 import com.hydrangea.storage_service.dto.response.FileUploadResponse;
 import com.hydrangea.storage_service.entity.FileMetadata;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -142,6 +145,42 @@ public class FileStorageController {
                     .code(404)
                     .message("File not found")
                     .build();
+        }
+    }
+
+    // Download multiple files as ZIP
+    @PostMapping("/download-zip")
+    public ResponseEntity<byte[]> downloadFilesAsZip(@RequestBody BulkDownloadRequest request,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+        log.info("Downloading {} files as ZIP for user: {}", request.getFileIds().size(), userDetails.getUsername());
+
+        try {
+            List<String> fileIds = request.getFileIds();
+            if (fileIds == null || fileIds.isEmpty()) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            byte[] zipData = fileStorageService.downloadFilesAsZip(fileIds, userDetails.getId());
+
+            // Generate filename with date
+            String date = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
+            String zipFilename = "files-" + date + ".zip";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("application/zip"));
+            headers.setContentDisposition(
+                    ContentDisposition.builder("attachment")
+                            .filename(zipFilename)
+                            .build());
+            headers.setContentLength(zipData.length);
+
+            log.info("ZIP downloaded successfully: {} bytes", zipData.length);
+
+            return new ResponseEntity<>(zipData, headers, HttpStatus.OK);
+
+        } catch (Exception e) {
+            log.error("Failed to create ZIP: " + e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
         }
     }
 }
