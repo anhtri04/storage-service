@@ -1,6 +1,7 @@
 package com.hydrangea.storage_service.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 
 import lombok.RequiredArgsConstructor;
 
@@ -41,6 +42,9 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeHttpRequests(auth -> auth
+                        // CORS preflight requests (no auth)
+                        .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/share-links/verify").permitAll()
