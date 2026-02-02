@@ -15,10 +15,18 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(100);
   const modalRef = useRef<HTMLDivElement>(null);
+  const blobUrlRef = useRef<string>('');
 
   // Fetch file content for preview (images, pdf, video, audio)
   useEffect(() => {
     if (!file) return;
+
+    // Cleanup previous blob URL
+    if (blobUrlRef.current) {
+      window.URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = '';
+      setBlobUrl('');
+    }
 
     const isTextFile = file.type.startsWith('text/') ||
                        file.type.includes('json') ||
@@ -45,6 +53,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
         })
         .then(blob => {
           const url = window.URL.createObjectURL(blob);
+          blobUrlRef.current = url;
           setBlobUrl(url);
           setLoading(false);
         })
@@ -78,8 +87,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
     }
 
     return () => {
-      if (blobUrl) {
-        window.URL.revokeObjectURL(blobUrl);
+      if (blobUrlRef.current) {
+        window.URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = '';
         setBlobUrl('');
       }
       setTextContent('');
