@@ -3,6 +3,8 @@ import { X, Download, File, Image, FileText, Music, Video, FileCode, Loader2 } f
 import { FileEntry } from '../types';
 import { api } from '../services/api';
 
+const API_BASE_URL = 'http://localhost:8080/api';
+
 interface FilePreviewModalProps {
   file: FileEntry | null;
   onClose: () => void;
@@ -88,8 +90,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
   // Get file preview URL
   const getPreviewUrl = useCallback(() => {
     if (!file) return '';
-    // Assuming API serves files at this endpoint
-    return `${api.baseURL}/files/${file.id}/preview`;
+    // Use the download endpoint as preview URL (browser will handle display)
+    return `${API_BASE_URL}/files/download/${file.id}`;
   }, [file]);
 
   // Render preview content based on file type
