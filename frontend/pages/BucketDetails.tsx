@@ -387,6 +387,7 @@ const BucketDetails: React.FC = () => {
                       : 'hover:bg-gray-50'
                   }`}
                   onClick={(e) => handleRowClick(e, file.id)}
+                  onDoubleClick={() => setPreviewFile(file)}
                 >
                   <td className="px-6 py-4 w-12">
                     <div className={`flex items-center justify-center ${selectedFileIds.has(file.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}>
@@ -463,6 +464,9 @@ const BucketDetails: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* File preview modal */}
+      <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 };
