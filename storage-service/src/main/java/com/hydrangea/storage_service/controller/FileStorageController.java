@@ -13,6 +13,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -67,6 +68,7 @@ public class FileStorageController {
     }
 
     // Download a file
+    @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:5173"})
     @GetMapping("/download/{fileId}")
     public ResponseEntity<byte[]> downloadFile(
             @PathVariable String fileId,
