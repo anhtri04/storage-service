@@ -197,12 +197,12 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>1/1</span>
           </div>
-          <div className="overflow-auto w-full h-[60vh] flex items-center justify-center">
+          <div className="overflow-auto w-full h-[60vh] flex items-center justify-center bg-gray-50">
             <img
               src={blobUrl}
               alt={file.name}
-              style={{ width: `${zoom}%`, height: 'auto', minWidth: '100%' }}
-              className="object-contain"
+              style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'center' }}
+              className="max-w-full max-h-full object-contain"
               onError={() => setError('Failed to load image')}
             />
           </div>
@@ -227,17 +227,15 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
       );
     }
 
-    // PDF preview - use object tag with proper type
+    // PDF preview - use iframe with blob URL
     if (isPdf && blobUrl) {
       return (
-        <object
-          data={blobUrl}
-          type="application/pdf"
-          className="w-full h-[70vh] rounded-lg"
+        <iframe
+          src={blobUrl}
+          className="w-full h-[70vh] rounded-lg border-0"
           title={file.name}
-        >
-          <p className="text-center text-gray-600">Unable to display PDF. <button onClick={handleDownload} className="text-[#028546] underline">Download</button> instead.</p>
-        </object>
+          onError={() => setError('Failed to load PDF')}
+        />
       );
     }
 
@@ -314,7 +312,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative bg-white rounded-xl shadow-2xl w-[1200px] h-[800px] flex flex-col animate-in zoom-in-95 duration-200"
+        className="relative bg-white rounded-xl shadow-2xl w-[1200px] h-[650px] flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
