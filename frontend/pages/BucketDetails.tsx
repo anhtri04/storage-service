@@ -5,6 +5,7 @@ import { ArrowLeft, Upload, File, Download, Trash2, Search, FileText, Image, Fil
 import { api } from '../services/api';
 import { ApiResponse, Bucket, FileEntry, FileUploadResponse } from '../types';
 import emptyBucket from '../assets/empty-bucket.png';
+import FilePreviewModal from '../components/FilePreviewModal';
 
 const BucketDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,7 @@ const BucketDetails: React.FC = () => {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [isProcessing, setIsProcessing] = useState(false);
   const [headerCheckboxState, setHeaderCheckboxState] = useState<'unchecked' | 'checked' | 'indeterminate'>('unchecked');
+  const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
   const navigate = useNavigate();
   const tableRef = useRef<HTMLDivElement>(null);
 
