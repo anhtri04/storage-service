@@ -80,8 +80,10 @@ public class FileStorageController {
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.parseMediaType(metadata.getContentType()));
+            // Use inline for PDFs to allow preview, attachment for other files
+            String dispositionType = metadata.getContentType().equals("application/pdf") ? "inline" : "attachment";
             headers.setContentDisposition(
-                    ContentDisposition.builder("attachment")
+                    ContentDisposition.builder(dispositionType)
                             .filename(metadata.getOriginalFileName())
                             .build());
             headers.setContentLength(fileData.length);
