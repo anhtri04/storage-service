@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Download, File, Image, FileText, Music, Video, FileCode, Loader2, Plus, Minus, RotateCcw } from 'lucide-react';
+import { X, Download, File, Image, FileText, Music, Video, FileCode, Loader2, Plus, Minus } from 'lucide-react';
 import { FileEntry } from '../types';
 import { api } from '../services/api';
 
@@ -146,10 +146,6 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
     setZoom(prev => Math.max(prev - 25, 25));
   }, []);
 
-  const handleResetZoom = useCallback(() => {
-    setZoom(100);
-  }, []);
-
   // Render preview content based on file type
   const renderPreview = () => {
     if (!file) return null;
@@ -201,11 +197,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>1/1</span>
           </div>
-          <div className="overflow-auto max-w-full max-h-[60vh] flex items-center justify-center">
+          <div className="overflow-auto w-full h-[60vh] flex items-center justify-center">
             <img
               src={blobUrl}
               alt={file.name}
-              style={{ width: `${zoom}%`, height: 'auto' }}
+              style={{ width: `${zoom}%`, height: 'auto', minWidth: '100%' }}
               className="object-contain"
               onError={() => setError('Failed to load image')}
             />
@@ -226,27 +222,22 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
             >
               <Plus className="w-5 h-5 text-gray-600" />
             </button>
-            <button
-              onClick={handleResetZoom}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Reset zoom"
-            >
-              <RotateCcw className="w-5 h-5 text-gray-600" />
-            </button>
           </div>
         </div>
       );
     }
 
-    // PDF preview
+    // PDF preview - use object tag with proper type
     if (isPdf && blobUrl) {
       return (
-        <iframe
-          src={blobUrl}
-          className="w-full h-[70vh] rounded-lg border-0"
+        <object
+          data={blobUrl}
+          type="application/pdf"
+          className="w-full h-[70vh] rounded-lg"
           title={file.name}
-          onError={() => setError('Failed to load PDF')}
-        />
+        >
+          <p className="text-center text-gray-600">Unable to display PDF. <button onClick={handleDownload} className="text-[#028546] underline">Download</button> instead.</p>
+        </object>
       );
     }
 
@@ -323,7 +314,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
       {/* Modal */}
       <div
         ref={modalRef}
-        className="relative bg-white rounded-xl shadow-2xl max-w-[90vw] max-h-[90vh] w-full flex flex-col animate-in zoom-in-95 duration-200"
+        className="relative bg-white rounded-xl shadow-2xl w-[1200px] h-[800px] flex flex-col animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
