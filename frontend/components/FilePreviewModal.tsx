@@ -16,10 +16,16 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
   const [zoom, setZoom] = useState(100);
   const modalRef = useRef<HTMLDivElement>(null);
   const blobUrlRef = useRef<string>('');
+  const fetchingFileIdRef = useRef<string | null>(null);
 
   // Fetch file content for preview (images, pdf, video, audio)
   useEffect(() => {
     if (!file) return;
+
+    // Guard: Skip if we're already fetching this exact file
+    if (fetchingFileIdRef.current === file.id) {
+      return;
+    }
 
     // Cleanup previous blob URL
     if (blobUrlRef.current) {
@@ -27,6 +33,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
       blobUrlRef.current = '';
       setBlobUrl('');
     }
+
+    // Mark this file as being fetched
+    fetchingFileIdRef.current = file.id;
 
     const isTextFile = file.type.startsWith('text/') ||
                        file.type.includes('json') ||
@@ -87,6 +96,8 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
     }
 
     return () => {
+      // Reset fetching flag when cleaning up
+      fetchingFileIdRef.current = null;
       if (blobUrlRef.current) {
         window.URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = '';
