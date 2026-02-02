@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Download, File, Image, FileText, Music, Video, FileCode, Loader2 } from 'lucide-react';
+import { X, Download, File, Image, FileText, Music, Video, FileCode, Loader2, Plus, Minus, RotateCcw } from 'lucide-react';
 import { FileEntry } from '../types';
 import { api } from '../services/api';
-
-const API_BASE_URL = 'http://localhost:8080/api';
 
 interface FilePreviewModalProps {
   file: FileEntry | null;
@@ -12,11 +10,13 @@ interface FilePreviewModalProps {
 
 const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) => {
   const [textContent, setTextContent] = useState<string>('');
+  const [blobUrl, setBlobUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(100);
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Fetch text content for text files
+  // Fetch file content for preview (images, pdf, video, audio)
   useEffect(() => {
     if (!file) return;
 
@@ -27,7 +27,34 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
                        file.type.includes('css') ||
                        file.type.includes('xml');
 
-    if (isTextFile) {
+    const isPreviewable = file.type.startsWith('image/') ||
+                          file.type === 'application/pdf' ||
+                          file.type.startsWith('video/') ||
+                          file.type.startsWith('audio/');
+
+    // Fetch blob for previewable files
+    if (isPreviewable) {
+      setLoading(true);
+      setError(null);
+      api.downloadFile(file.id)
+        .then(res => {
+          if (res.ok) {
+            return res.blob();
+          }
+          throw new Error('Failed to load file');
+        })
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          setBlobUrl(url);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error('Error loading file:', err);
+          setError('Failed to load file');
+          setLoading(false);
+        });
+    } else if (isTextFile) {
+      // Fetch text content
       setLoading(true);
       setError(null);
       api.downloadFile(file.id)
@@ -48,12 +75,20 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
         });
     } else {
       setLoading(false);
-      setError(null);
     }
 
     return () => {
+      if (blobUrl) {
+        window.URL.revokeObjectURL(blobUrl);
+        setBlobUrl('');
+      }
       setTextContent('');
     };
+  }, [file]);
+
+  // Reset zoom when file changes
+  useEffect(() => {
+    setZoom(100);
   }, [file]);
 
   // Handle escape key and click outside
@@ -82,17 +117,38 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
   }, [file, onClose]);
 
   // Handle download
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!file) return;
-    api.downloadFile(file.id, file.name).catch(console.error);
+    try {
+      const res = await api.downloadFile(file.id);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }
+    } catch (e) {
+      console.error(e);
+    }
   }, [file]);
 
-  // Get file preview URL
-  const getPreviewUrl = useCallback(() => {
-    if (!file) return '';
-    // Use the download endpoint as preview URL (browser will handle display)
-    return `${API_BASE_URL}/files/download/${file.id}`;
-  }, [file]);
+  // Zoom controls
+  const handleZoomIn = useCallback(() => {
+    setZoom(prev => Math.min(prev + 25, 300));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoom(prev => Math.max(prev - 25, 25));
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    setZoom(100);
+  }, []);
 
   // Render preview content based on file type
   const renderPreview = () => {
@@ -138,26 +194,55 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
                        file.type.includes('css') ||
                        file.type.includes('xml');
 
-    // Image preview
-    if (isImage) {
+    // Image preview with zoom
+    if (isImage && blobUrl) {
       return (
-        <div className="flex items-center justify-center h-full">
-          <img
-            src={getPreviewUrl()}
-            alt={file.name}
-            className="max-w-full max-h-[70vh] object-contain"
-            onError={() => setError('Failed to load image')}
-            onLoad={() => setLoading(false)}
-          />
+        <div className="flex flex-col items-center justify-center h-full gap-4">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <span>1/1</span>
+          </div>
+          <div className="overflow-auto max-w-full max-h-[60vh] flex items-center justify-center">
+            <img
+              src={blobUrl}
+              alt={file.name}
+              style={{ width: `${zoom}%`, height: 'auto' }}
+              className="object-contain"
+              onError={() => setError('Failed to load image')}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleZoomOut}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Zoom out"
+            >
+              <Minus className="w-5 h-5 text-gray-600" />
+            </button>
+            <span className="text-sm text-gray-600 min-w-[3rem] text-center">{zoom}%</span>
+            <button
+              onClick={handleZoomIn}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Zoom in"
+            >
+              <Plus className="w-5 h-5 text-gray-600" />
+            </button>
+            <button
+              onClick={handleResetZoom}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Reset zoom"
+            >
+              <RotateCcw className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
       );
     }
 
     // PDF preview
-    if (isPdf) {
+    if (isPdf && blobUrl) {
       return (
         <iframe
-          src={getPreviewUrl()}
+          src={blobUrl}
           className="w-full h-[70vh] rounded-lg border-0"
           title={file.name}
           onError={() => setError('Failed to load PDF')}
@@ -177,11 +262,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
     }
 
     // Video preview
-    if (isVideo) {
+    if (isVideo && blobUrl) {
       return (
         <div className="flex items-center justify-center h-full">
           <video
-            src={getPreviewUrl()}
+            src={blobUrl}
             controls
             className="max-w-full max-h-[70vh]"
             onError={() => setError('Failed to load video')}
@@ -193,14 +278,14 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
     }
 
     // Audio preview
-    if (isAudio) {
+    if (isAudio && blobUrl) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-8">
           <div className="w-32 h-32 bg-gray-100 rounded-full flex items-center justify-center">
             <Music className="w-16 h-16 text-gray-400" />
           </div>
           <audio
-            src={getPreviewUrl()}
+            src={blobUrl}
             controls
             className="w-full max-w-md"
             onError={() => setError('Failed to load audio')}
@@ -231,7 +316,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) =>
   if (!file) return null;
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center animate-in fade-in-0 duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center animate-in fade-in-0 duration-200">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70" />
 
