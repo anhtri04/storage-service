@@ -158,6 +158,60 @@ class ApiClient {
     return this.fetchWithAuth(`/files/download/${fileId}`);
   }
 
+  /**
+   * Get preview URL for a file using token-based authentication.
+   * This URL can be used in iframes to display PDFs, images, etc.
+   * The token is passed as a query parameter to bypass browser extension interference.
+   */
+  getPreviewUrl(fileId: string): string {
+    const token = this.accessToken;
+    if (!token) {
+      throw new Error('No access token available');
+    }
+    return `${BASE_URL}/files/preview/${fileId}?token=${encodeURIComponent(token)}`;
+  }
+
+  /**
+   * Get file preview data as base64.
+   * Returns JSON with base64 data and content type.
+   * This approach bypasses download managers like IDM.
+   */
+  async getPreviewData(fileId: string): Promise<{ data: string; contentType: string; fileName: string } | null> {
+    try {
+      const res = await this.fetchWithAuth(`/files/preview-data/${fileId}`);
+      const json = await res.json();
+      console.log('Preview data response:', json);
+      if (json.code === 200 && json.result) {
+        return json.result;
+      }
+      console.error('Preview data error:', json.message);
+      return null;
+    } catch (e) {
+      console.error('Error fetching preview data:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Convert DOCX to PDF and get as base64.
+   * Server-side conversion for accurate Word document rendering.
+   */
+  async getDocxAsPdf(fileId: string): Promise<{ data: string; contentType: string; fileName: string } | null> {
+    try {
+      const res = await this.fetchWithAuth(`/files/preview-docx-as-pdf/${fileId}`);
+      const json = await res.json();
+      console.log('DOCX to PDF response:', json);
+      if (json.code === 200 && json.result) {
+        return json.result;
+      }
+      console.error('DOCX to PDF error:', json.message);
+      return null;
+    } catch (e) {
+      console.error('Error converting DOCX to PDF:', e);
+      return null;
+    }
+  }
+
   async deleteFile(fileId: string) {
     return this.fetchWithAuth(`/files/${fileId}`, { method: 'DELETE' });
   }
