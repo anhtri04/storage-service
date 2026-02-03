@@ -1,5 +1,16 @@
 package com.hydrangea.storage_service.service;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -12,22 +23,14 @@ import com.hydrangea.storage_service.entity.Bucket;
 import com.hydrangea.storage_service.entity.Chunk;
 import com.hydrangea.storage_service.entity.FileChunkMapping;
 import com.hydrangea.storage_service.entity.FileMetadata;
+import com.hydrangea.storage_service.entity.User;
 import com.hydrangea.storage_service.repository.BucketRepository;
 import com.hydrangea.storage_service.repository.ChunkRepository;
 import com.hydrangea.storage_service.repository.FileMetadataRepository;
+import com.hydrangea.storage_service.repository.UserRepository;
+import com.hydrangea.storage_service.util.JwtUtil;
 
 import lombok.extern.slf4j.Slf4j;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 @Service
 @Slf4j
@@ -38,17 +41,23 @@ public class FileStorageService {
     private final ChunkingService chunkingService;
     private final S3Service s3Service;
     private final BucketRepository bucketRepository;
+    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     public FileStorageService(FileMetadataRepository fileMetadataRepository,
             ChunkRepository chunkRepository,
             ChunkingService chunkingService,
             S3Service s3Service,
-            BucketRepository bucketRepository) {
+            BucketRepository bucketRepository,
+            JwtUtil jwtUtil,
+            UserRepository userRepository) {
         this.fileMetadataRepository = fileMetadataRepository;
         this.chunkRepository = chunkRepository;
         this.chunkingService = chunkingService;
         this.s3Service = s3Service;
         this.bucketRepository = bucketRepository;
+        this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -329,5 +338,40 @@ public class FileStorageService {
         log.info("ZIP created: " + zipBytes.length + " bytes");
 
         return zipBytes;
+    }
+
+    /**
+     * Download file using JWT token for authentication (token passed in URL).
+     * Used for preview functionality to avoid browser extension interference.
+     */
+    @Transactional(readOnly = true)
+    public byte[] downloadFileWithToken(String fileId, String token) {
+        Long userId = validateTokenAndGetUserId(token);
+        return downloadFile(fileId, userId);
+    }
+
+    /**
+     * Get file metadata using JWT token for authentication (token passed in URL).
+     * Used for preview functionality.
+     */
+    @Transactional(readOnly = true)
+    public FileMetadata getFileMetadataWithToken(String fileId, String token) {
+        Long userId = validateTokenAndGetUserId(token);
+        return getFileMetadata(fileId, userId);
+    }
+
+    /**
+     * Validate JWT token and extract user ID.
+     */
+    private Long validateTokenAndGetUserId(String token) {
+        if (!jwtUtil.validateToken(token)) {
+            throw new RuntimeException("Invalid or expired token");
+        }
+
+        String username = jwtUtil.extractUsername(token);
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return user.getId();
     }
 }
