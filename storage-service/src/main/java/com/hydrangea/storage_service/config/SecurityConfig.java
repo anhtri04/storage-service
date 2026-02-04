@@ -1,11 +1,8 @@
 package com.hydrangea.storage_service.config;
 
-import org.springframework.context.annotation.Configuration;
-
-import lombok.RequiredArgsConstructor;
-
-import com.hydrangea.storage_service.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -21,6 +18,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import com.hydrangea.storage_service.security.JwtAuthenticationFilter;
+
+import lombok.RequiredArgsConstructor;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -34,10 +35,17 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
+                // CORS is handled by CorsFilter with @Order(Ordered.HIGHEST_PRECEDENCE)
+                .cors(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // CORS preflight requests (no auth)
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/share-links/verify").permitAll()
+                        // Preview endpoint uses token in URL for auth (bypasses IDM extension)
+                        .requestMatchers("/api/files/preview/**").permitAll()
 
                         // Admin-only endpoints
                         .requestMatchers("/actuator/**").hasRole("ADMIN")
