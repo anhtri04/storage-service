@@ -2,8 +2,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Upload, File, Download, Trash2, Search, FileText, Image, FileCode, Music, Video, X, Loader2, Check, Square } from 'lucide-react';
+import { useFileDrop } from '../hooks/useFileDrop';
+import { useToast } from '../hooks/useToast';
+import { UploadProgress } from '../components/UploadProgress';
+import { ToastContainer } from '../components/ToastContainer';
 import { api } from '../services/api';
-import { ApiResponse, Bucket, FileEntry, FileUploadResponse } from '../types';
+import { ApiResponse, Bucket, FileEntry, FileUploadResponse, FileUploadProgress } from '../types';
+import { validateFile, uploadFilesWithProgress, checkDuplicates } from '../utils/uploadUtils';
 import emptyBucket from '../assets/empty-bucket.png';
 import FilePreviewModal from '../components/FilePreviewModal';
 
@@ -20,6 +25,8 @@ const BucketDetails: React.FC = () => {
   const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
   const navigate = useNavigate();
   const tableRef = useRef<HTMLDivElement>(null);
+  const [uploads, setUploads] = useState<FileUploadProgress[]>([]);
+  const { showToast } = useToast();
 
   const fetchFiles = async () => {
     if (!bucketId) return;
@@ -39,6 +46,44 @@ const BucketDetails: React.FC = () => {
   useEffect(() => {
     fetchFiles();
   }, [bucketId]);
+
+  // Navigation guard - prevent leaving page during uploads
+  useEffect(() => {
+    const hasPendingUploads = uploads.some((u) => u.status === 'uploading' || u.status === 'pending');
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasPendingUploads) {
+        e.preventDefault();
+        e.returnValue = 'Uploads in progress. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [uploads]);
+
+  // Offline/online detection
+  useEffect(() => {
+    const handleOffline = () => {
+      if (uploads.some((u) => u.status === 'uploading' || u.status === 'pending')) {
+        showToast('error', 'You are offline. Uploads have been paused.');
+      }
+    };
+
+    const handleOnline = () => {
+      if (uploads.some((u) => u.status === 'pending')) {
+        showToast('success', 'Back online. You can retry your uploads.');
+      }
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [uploads, showToast]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,6 +110,92 @@ const BucketDetails: React.FC = () => {
       e.target.value = '';
     }
   };
+
+  const handleFileDrop = async (droppedFiles: File[]) => {
+    if (!bucketId) return;
+
+    // Check for duplicates
+    const duplicates = checkDuplicates(droppedFiles, files);
+    if (duplicates.length > 0) {
+      const duplicateNames = duplicates.map((f) => f.name).join(', ');
+      showToast('error', `Files already exist: ${duplicateNames}`);
+      return;
+    }
+
+    // Validate files
+    const validationErrors: string[] = [];
+    const validFiles = droppedFiles.filter((file) => {
+      const error = validateFile(file);
+      if (error) {
+        validationErrors.push(error);
+        return false;
+      }
+      return true;
+    });
+
+    // Show validation errors
+    validationErrors.forEach((error) => {
+      showToast('error', error);
+    });
+
+    if (validFiles.length === 0) {
+      return;
+    }
+
+    // Create upload progress entries
+    const newUploads: FileUploadProgress[] = validFiles.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      status: 'pending',
+      progress: 0,
+    }));
+
+    setUploads((prev) => [...prev, ...newUploads]);
+
+    // Map file to upload ID
+    const fileToIdMap = new Map<File, string>();
+    newUploads.forEach((upload) => {
+      fileToIdMap.set(upload.file, upload.id);
+    });
+
+    // Upload files
+    await uploadFilesWithProgress(
+      validFiles,
+      bucketId,
+      (id, progress, status, error) => {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === id ? { ...u, progress, status, error } : u
+          )
+        );
+      },
+      (file) => fileToIdMap.get(file) || ''
+    );
+
+    // Show success/error toasts
+    const successful = newUploads.filter((u) => u.status === 'success');
+    const failed = newUploads.filter((u) => u.status === 'error');
+
+    if (successful.length > 0) {
+      showToast('success', `Uploaded ${successful.length} file${successful.length > 1 ? 's' : ''}`);
+    }
+
+    if (failed.length > 0) {
+      failed.forEach((u) => {
+        if (u.error) {
+          showToast('error', u.error);
+        }
+      });
+    }
+
+    // Refresh files
+    fetchFiles();
+  };
+
+  // Page-level drag & drop
+  const { isDragging, dragHandlers } = useFileDrop({
+    onDrop: handleFileDrop,
+  });
 
   const handleDeleteFile = async (fileId: string) => {
     if (window.confirm('Delete this file permanently?')) {
@@ -265,7 +396,17 @@ const BucketDetails: React.FC = () => {
   };
 
   return (
-    <div>
+    <div {...dragHandlers} className="min-h-screen bg-gray-50 relative">
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 border-4 border-dashed border-[#00ED64] bg-green-50/30 z-[60] flex items-center justify-center pointer-events-none">
+          <div className="bg-white rounded-xl p-8 shadow-lg">
+            <Upload className="w-16 h-16 text-[#00ED64] mx-auto mb-4" />
+            <p className="text-lg font-semibold text-gray-900">Drop files to upload</p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={() => navigate('/')}
@@ -467,6 +608,10 @@ const BucketDetails: React.FC = () => {
 
       {/* File preview modal */}
       <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      {/* Toast and upload progress */}
+      <ToastContainer />
+      <UploadProgress uploads={uploads} onClose={() => setUploads([])} />
     </div>
   );
 };

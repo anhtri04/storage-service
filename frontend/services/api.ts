@@ -144,13 +144,121 @@ class ApiClient {
   }
 
   // Files
-  async uploadFile(bucketId: string, file: File) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('bucketId', bucketId);
-    return this.fetchWithAuth('/files/upload', {
-      method: 'POST',
-      body: formData,
+  /**
+   * Upload a file to a bucket with optional progress tracking.
+   * Uses XMLHttpRequest when progress tracking is needed, otherwise falls back to fetch.
+   *
+   * @param bucketId - The ID of the bucket to upload to
+   * @param file - The file to upload
+   * @param onProgress - Optional callback for upload progress (0-100)
+   * @returns Promise resolving to the upload response
+   */
+  async uploadFile(
+    bucketId: string,
+    file: File,
+    onProgress?: (progress: number) => void
+  ): Promise<Response> {
+    // If no progress callback needed, use fetch for backward compatibility
+    if (!onProgress) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('bucketId', bucketId);
+      return this.fetchWithAuth('/files/upload', {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
+    // Use XMLHttpRequest for progress tracking
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${BASE_URL}/files/upload`);
+
+      // Add auth header
+      if (this.accessToken) {
+        xhr.setRequestHeader('Authorization', `Bearer ${this.accessToken}`);
+      }
+
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          onProgress(progress);
+        }
+      });
+
+      xhr.onload = () => {
+        const response = new Response(xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+        });
+
+        // Handle 401 unauthorized - try to refresh token
+        if (xhr.status === 401) {
+          const refreshToken = localStorage.getItem('refresh_token');
+          if (refreshToken) {
+            fetch(`${BASE_URL}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken }),
+            })
+              .then((refreshRes) => refreshRes.json())
+              .then((apiResponse) => {
+                if (apiResponse.result) {
+                  this.setTokens(apiResponse.result.accessToken, apiResponse.result.refreshToken);
+
+                  // Retry original request
+                  const retryXhr = new XMLHttpRequest();
+                  retryXhr.open('POST', `${BASE_URL}/files/upload`);
+                  retryXhr.setRequestHeader('Authorization', `Bearer ${this.accessToken}`);
+
+                  retryXhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable && onProgress) {
+                      const progress = Math.round((e.loaded / e.total) * 100);
+                      onProgress(progress);
+                    }
+                  });
+
+                  retryXhr.onload = () => {
+                    resolve(new Response(retryXhr.responseText, {
+                      status: retryXhr.status,
+                      statusText: retryXhr.statusText,
+                    }));
+                  };
+
+                  retryXhr.onerror = () => reject(new Error('Upload failed after retry'));
+
+                  const formData = new FormData();
+                  formData.append('file', file);
+                  formData.append('bucketId', bucketId);
+                  retryXhr.send(formData);
+                } else {
+                  this.clearTokens();
+                  window.location.hash = '#/login';
+                  resolve(response);
+                }
+              })
+              .catch(() => {
+                this.clearTokens();
+                window.location.hash = '#/login';
+                resolve(response);
+              });
+          } else {
+            this.clearTokens();
+            window.location.hash = '#/login';
+            resolve(response);
+          }
+        } else {
+          resolve(response);
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Upload failed'));
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('bucketId', bucketId);
+      xhr.send(formData);
     });
   }
 

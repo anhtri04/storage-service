@@ -51,3 +51,29 @@ export interface FileUploadResponse {
   bucketId: string;
   bucketName: string;
 }
+
+/**
+ * Upload progress status for a file being uploaded.
+ * - pending: File is queued and waiting to be uploaded
+ * - uploading: File is currently being uploaded
+ * - success: File was uploaded successfully
+ * - error: File upload failed with an error
+ */
+export type UploadStatus = 'pending' | 'uploading' | 'success' | 'error';
+
+/**
+ * Tracks the progress and status of an individual file upload.
+ * Used for managing multi-file uploads with real-time progress tracking.
+ */
+export interface FileUploadProgress {
+  /** Unique identifier for this upload operation */
+  id: string;
+  /** The file being uploaded */
+  file: File;
+  /** Current upload status */
+  status: UploadStatus;
+  /** Upload progress percentage (0-100) */
+  progress: number;
+  /** Error message if status is 'error' */
+  error?: string;
+}
